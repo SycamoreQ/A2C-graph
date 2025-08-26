@@ -5,5 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "gym>=0.26.2",
+    "matplotlib>=3.10.5",
+    "neo4j>=5.28.2",
+    "networkx>=3.5",
+    "pandas>=2.3.2",
+    "seaborn>=0.13.2",
+    "torc>=0.1.1",
     "torch>=2.8.0",
 ]
