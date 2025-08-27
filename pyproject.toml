@@ -16,6 +16,8 @@ dependencies = [
     "pydantic>=2.11.7",
     "redis>=6.4.0",
     "seaborn>=0.13.2",
+    "tiktoken>=0.11.0",
     "torc>=0.1.1",
     "torch>=2.8.0",
+    "torch-geometric>=2.6.1",
 ]
