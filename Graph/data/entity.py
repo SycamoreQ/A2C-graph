@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+from .named import Named
 @dataclass 
 class Entity(Named):
     "An entity in the system like an author"

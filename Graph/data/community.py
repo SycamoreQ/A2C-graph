@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from .named import Named
+
 @dataclass
 class Community(Named):
     "protocol for a community or a set of nodes"
@@ -40,7 +42,7 @@ class Community(Named):
     temporal_evolutions: dict[str , any]
     "unimplemented for now but stores the temporal evolutions of subgraphs based on time slices"
 
-    
+
 
 @classmethod
 def from_dict(
