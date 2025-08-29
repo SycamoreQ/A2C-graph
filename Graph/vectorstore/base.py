@@ -91,3 +91,9 @@ class BaseVectorStore(ABC):
     def search_by_orcid(self , orcid: str) -> VectorStoreDocument:
         """Search for a document by orcid."""
 
+        
+    @abstractmethod
+    def similarity_search_by_subgraph(self , text: str , text_embedder: TextEmbedder) -> VectorStoreDocument: 
+        "search using subgraph similarity"
+
+        
