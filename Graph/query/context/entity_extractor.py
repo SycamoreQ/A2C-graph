@@ -16,6 +16,7 @@ from vectorstore.base import VectorStoreSearchResult , VectorStoreDocument , Bas
 from typing import List , Dict , Any
 from Graph.data.entity import Entity
 from Graph.data.relationship import Relationship
+from embedder.embedder import TextEmbedder
 
 class EntityVectorStoreKey(str , Enum):
     ID = "id"
@@ -36,16 +37,47 @@ class EntityVectorStoreKey(str , Enum):
     def map_query_to_entity(
             query: str , 
             text_embedding_vectorstore: BaseVectorStore,
-            embedding_vectorstore_ids: str =  EntityVectorStoreKey.ID,
-            text_embedder =  EmbeddingModel
+            embedder: TextEmbedder,
+            all_entitis_dict: dict[str , Any],
+            embedding_vectorstore_key: str = ID
     ) -> list[Entity]: 
-        
+        matched_entities = []
         if query != " " : 
             
             search_result = BaseVectorStore.similarity_search_by_subgraph(
                 text = query , 
-                text_embedder= lambda t : text_embedder.embed(t)
+                text_embedder= lambda t : embedder.encode(t) 
+                
             )
+
+            for results in search_result: 
+                if embedding_vectorstore_key == EntityVectorStoreKey.ID and isinstance(
+                    results.document.id , str 
+                ):
+                    matched  = get_entity_by_id(
+                        entity_id = results.document.id , 
+                        all_entities_dict= all_entitis_dict
+                    )
+
+
+                else:
+                    matched = get_entity_by_key(
+                        entities= all_entitis_dict,
+                        keys = embedding_vectorstore_key,
+                        value= results.document.id,
+                    )
+
+                if matched:
+                    matched_entities.append(matched)
+
+        
+
+
+            
+
+            
+
+
     
 
 

@@ -9,6 +9,9 @@ class Community(Named):
     level: str
     """Community level."""
 
+    type: str 
+    """Community type"""
+
     parent: str
     """Community ID of the parent node of this community."""
 
