@@ -14,6 +14,7 @@ import datetime
 import numpy as np 
 from Graph.data.community import Community
 import networkx as nx 
+from retrieval.entity import * 
 from networkx.algorithms.similarity import graph_edit_distance
 from networkx.algorithms.similarity import optimize_edit_paths
 
@@ -127,6 +128,51 @@ def get_trending_community(
     
     trending_communities.sort(key=lambda x: x['trending_score'], reverse=True)
     return [item['community'] for item in trending_communities[:top_k]]
+
+def get_trending_topic_subgraph(
+        communities: Iterable[Community],
+        type: "paper",
+        top_k : int = 5,
+        min_entity_count:int =  10
+) -> List[Community]:
+    trending = []
+    current_date = datetime.now()
+
+    for community in communities:
+        if not community.attributes:
+            continue 
+
+        if community.entities != None:
+            trending_entities = find_trending_papers(
+                community.entities
+            )
+
+            if trending_entities > min_entity_count : 
+                community.get("subject")
+                trending.append[community]
+
+            else : 
+                print("cannot find . Somewhere wrong")
+            
+        else:
+            print("cannot find. Somewhere wrong")
+
+    return trending
+
+
+
+        
+
+            
+
+            
+
+    
+
+
+     
+
+    
 
 
 def is_valid_uuid(value: str) -> bool:
