@@ -40,6 +40,28 @@ The database is structured as a knowledge graph where:
 Structure your responses with clear entity identification, relationship mappings, and relevance scores. Include reasoning for your selections and highlight any important indirect connections discovered through graph traversal."""
 
 
+HYPERGRAPH_CREATION_SYSTEM_PROMPT = """You are a specialized agent that takes a given set of entities and relationships and create a hypergraph out of both inputs. Given a large entity and relationship triple database , your job is to create a hypergraph that will connect 
+two entities or more than two entities with respect to their relationships. The database that will be given to you is a research paper database with Research papers, authors, institutions, venues, and concepts as entities and these following relationships: 
+-collaborators : the people who worked on the publication
+-co authorships : the authors of the paper
+-methodological group : the laboratory the paper was written in
+-institutional affiliation : the institute the author or the paper was written in 
+-citation clusters : the citations that specific paper has 
+-cross disciplinary: the different plethora of subjects that paper contributes to.
+
+## Your core capabilities: 
+1. **Entity Extraction: Identify the research papers , authors , institutions , venues based on the query
+2. **Relationship Analysis: Understand the complex relationships between the entities
+3. **Hypergraph Construction: Create the hypergraph by connecting relationships that overlap two or more entities together , you should classify that as a hyperedge and return the hyperedge and the entities it encompasses
+
+# Task Guidlines:
+- Only consider the relationships to be a hyperedge if there is a clear sign of a overlap of any given reason stated above. The hyperedge has to be under those categories or else it is not considered a hyperedge
+- There should also be a clear topological understanding of the hypergraph i.e do not make it very sparse and not too dense as well. Filter based on you knowledge
+
+#Output format: 
+Structure you responses with clear entity and hyperedge relations. Include the attribute or edge type based on the categories mentioned on top
+"""
+
 COMMUNITY_DETECTION_SYSTEM_PROMPT = """You are a specialized community detection agent for academic knowledge graphs. Your role is to identify, analyze, and select the most relevant research communities within the knowledge graph based on user queries and graph structure.
 
 ## Community Detection Objectives:
@@ -122,6 +144,7 @@ class PaperRetrievalSystem:
         self.redis_client = redis_client
         self.system_prompts = {
             'retrieval': PAPER_RETRIEVAL_SYSTEM_PROMPT,
+            'hypergraph_creation': HYPERGRAPH_CREATION_SYSTEM_PROMPT , 
             'community_detection': COMMUNITY_DETECTION_SYSTEM_PROMPT,
             'summarization': COMMUNITY_SUMMARIZATION_SYSTEM_PROMPT,
             'query_refinement': QUERY_REFINEMENT_SYSTEM_PROMPT
@@ -138,6 +161,11 @@ class PaperRetrievalSystem:
             system_prompt=self.get_system_prompt('query_refinement'),
             user_message=f"Analyze and refine this research query: {user_query}"
         )
+
+        hypergraph_creation_response = query_chat_openai(
+            system_prompt = self.get_system_prompt('hypergraph_creation'),
+            user_message = f"Create hypergraph given the entities and relationship categories : {user_query}"
+        )
         
         community_detection_response = query_chat_openai(
             system_prompt=self.get_system_prompt('community_detection'),
@@ -153,6 +181,7 @@ class PaperRetrievalSystem:
         return {
             'refined_query': refined_query_response,
             'detected_communities': community_detection_response,
+            'hypergraph': hypergraph_creation_response,
             'community_summaries': summarization_response
         }
 
