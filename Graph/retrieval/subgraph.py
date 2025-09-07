@@ -159,22 +159,6 @@ def get_trending_topic_subgraph(
 
     return trending
 
-
-
-        
-
-            
-
-            
-
-    
-
-
-     
-
-    
-
-
 def is_valid_uuid(value: str) -> bool:
     """Determine if a string is a valid UUID."""
     try:
@@ -184,6 +168,17 @@ def is_valid_uuid(value: str) -> bool:
     else:
         return True
         
+
+
+class DynamicSubgraphSelector:
+    
+
+
+    def __init__(
+            self , 
+            communities : list[Community]
+            model: ChatModel
+    )
             
 
     

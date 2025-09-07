@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+from data.entity import * 
 
 from .named import Named
 
@@ -17,6 +18,8 @@ class Community(Named):
 
     children: list[str]
     """List of community IDs of the child nodes of this community."""
+
+    entities: list[Entity]
 
     entity_ids: list[str] | None = None
     """List of entity IDs related to the community (optional)."""
