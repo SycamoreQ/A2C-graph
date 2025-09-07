@@ -169,16 +169,6 @@ def is_valid_uuid(value: str) -> bool:
         return True
         
 
-
-class DynamicSubgraphSelector:
-    
-
-
-    def __init__(
-            self , 
-            communities : list[Community]
-            model: ChatModel
-    )
             
 
     
