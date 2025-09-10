@@ -11,7 +11,7 @@ from RL.environment import State , Action , Environment , Reward
 from model.llm import PaperRetrievalSystem 
 import tiktoken
 from transformers import AutoTokenizer , AutoModel
-from Graph.data.community import FEATURE_SCHEMA
+from Graph.data.community import CommunityScore
 import re
 import numpy as np 
 
@@ -197,6 +197,26 @@ class TextTokenizeOutput:
         unique_categories = list(set(categories))
         counts = [categories.count(cat) for cat in unique_categories]
         return torch.tensor(counts, dtype=torch.float32)
+    
+    def extract_json_features(self , text:str) -> List[CommunityScore]: 
+        """For reward function: to take json values and then give into for trainin"""
+
+        data = json.loads(text)
+        out = []
+        for row in data:
+            out.append(
+                CommunityScore(
+                    community_id=row["community_id"],
+                    relevance=float(row["relevance_score"]),
+                    quality=float(row["quality_score"]),
+                    diversity=float(row["diversity_score"]),
+                    meta={k: v for k, v in row.items() if k not in {
+                        "community_id","relevance_score","quality_score","diversity_score"
+                    }},
+                )
+            )
+        return out
+    
     
 
 

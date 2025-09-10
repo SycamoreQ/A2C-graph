@@ -78,15 +78,9 @@ COMMUNITY_DETECTION_SYSTEM_PROMPT = """You are a specialized community detection
 - **Impact Metrics**: Citation counts, h-indices, and venue prestige within communities
 - **Cross-Community Bridges**: Important connections between different research areas
 
-## Selection Criteria:
-- Relevance to the query topic (primary criterion)
-- Community size and activity level
-- Research impact and influence
-- Diversity of perspectives within the community
-- Potential for interdisciplinary insights
-
 ## Output Requirements:
-Provide the list of communities with a some metdata on the commonalities found in those communities and also the relevnce towards the query of the user. 
+Provide the list of communities with proper entities involved to create that community and the relations they have , communities relevance , 
+quality and diversity amongst the other communities.
 """
 
 QUERY_REFINEMENT_SYSTEM_PROMPT = """You are a query refinement specialist for academic knowledge graphs. Your role is to analyze user queries and suggest improvements, expansions, or alternative formulations to maximize retrieval effectiveness.
@@ -162,10 +156,6 @@ class PaperRetrievalSystem:
                 'text': community_detection_response,
                 'tensors': community_detection_tensor
             },
-            'pipeline_metadata': {
-                'user_query': user_query,
-                'max_communities': max_communities,
-            }
         }
 
         return combined_output
