@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from typing import Union
 import numpy as np
+from .convert import TextTokenizeOutput
 
 
 PAPER_RETRIEVAL_SYSTEM_PROMPT = """You are an advanced research paper retrieval agent operating on a comprehensive knowledge graph database. Your primary responsibility is to extract, analyze, and retrieve relevant information from an academic research database.
@@ -85,13 +86,8 @@ COMMUNITY_DETECTION_SYSTEM_PROMPT = """You are a specialized community detection
 - Potential for interdisciplinary insights
 
 ## Output Requirements:
-Provide community summaries including key topics, prominent authors, representative papers, and reasoning for selection or rejection of each community. Return in a JSON format like: 
-
-{
-}
+Provide the list of communities with a some metdata on the commonalities found in those communities and also the relevnce towards the query of the user. 
 """
-
-
 
 QUERY_REFINEMENT_SYSTEM_PROMPT = """You are a query refinement specialist for academic knowledge graphs. Your role is to analyze user queries and suggest improvements, expansions, or alternative formulations to maximize retrieval effectiveness.
 
@@ -148,14 +144,37 @@ class PaperRetrievalSystem:
             system_prompt=self.get_system_prompt('community_detection'),
             user_message=f"Detect relevant research communities for: {user_query}"
         )
-        
-        
-        
-        return {
-            'refined_query': refined_query_response,
-            'detected_communities': community_detection_response,
-            'hypergraph': hypergraph_creation_response,
+
+        refined_query_tensor = TextTokenizeOutput.extract_features_from_text(refined_query_response)
+        hypergraph_creation_tensor = TextTokenizeOutput.extract_features_from_text(refined_query_response)
+        community_detection_tensor = TextTokenizeOutput.extract_features_from_text(community_detection_response)
+
+        combined_output = {
+            'refined_query': {
+                'text': refined_query_response,
+                'tensors': refined_query_tensor
+            },
+            'hypergraph': {
+                'text': hypergraph_creation_response,
+                'tensors': hypergraph_creation_tensor
+            },
+            'communities': {
+                'text': community_detection_response,
+                'tensors': community_detection_tensor
+            },
+            'pipeline_metadata': {
+                'user_query': user_query,
+                'max_communities': max_communities,
+            }
         }
+
+        return combined_output
+    
+
+    
+    
+
+        
 
 
 

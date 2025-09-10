@@ -29,7 +29,6 @@ class A2CTrainer:
         self.value_loss_coeff = value_loss_coeff
         self.device = device
         
-        # Training statistics
         self.training_rewards = deque(maxlen=1000)
         self.training_losses = deque(maxlen=1000)
 
@@ -39,11 +38,9 @@ class A2CTrainer:
                      communities: List[CommunityFeatures]) -> Dict[str, float]:
         """Train on a single episode with full tensor operations."""
         
-        # Initialize environment
         env.set_query_and_communities(query_embedding, communities)
         state = env.reset()
         
-        # Episode storage (all tensors)
         states = []
         actions = []
         rewards = []
@@ -54,10 +51,8 @@ class A2CTrainer:
         total_reward = torch.tensor(0.0, device=self.device)
         
         while not done:
-            # Convert state to tensor
             state_tensor = state.to_flat_tensor().unsqueeze(0)
             
-            # Get action probabilities and state value
             action_probs, state_value = self.model(state_tensor)
             
             # Mask invalid actions
