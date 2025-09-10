@@ -11,13 +11,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 @dataclass
-class Action:
-    """Represents an action of selecting a community."""
-    community_id: str
-    selection_probability: float
-    action_index: int
-
-
 class State:
     """State containing LLM features and current selection status"""
     llm_query_features: torch.Tensor     
@@ -35,9 +28,11 @@ class State:
             self.llm_query_features.flatten(),
             self.llm_community_features.flatten(), 
             self.llm_hypergraph_features.flatten(),
-            torch.tensor([self.remaining_budget / 10.0]), 
+            torch.tensor([self.remaining_budget / 10.0]),
+            self.community_embeddings.flatten(), 
             self.community_scores  
         ]
+
         
         #selection mask (0 if selected, 1 if available)
         selection_mask = torch.tensor([
@@ -50,7 +45,7 @@ class State:
     
 @dataclass
 class Action: 
-    def create_rl_action_space(self, pipeline_output: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    def create_action_space(self, pipeline_output: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         """
         Create action space tensors for RL agent
         
@@ -105,15 +100,15 @@ class Environment:
         return self._get_current_state()
         
     def set_query_and_communities(self, 
-                                 query_embedding: np.ndarray,
-                                 communities: List[CommunityFeatures]):
+                                 query_embedding: np.ndarray):
         """Initialize environment with query and available communities."""
         self.current_query = query_embedding
-        self.available_communities = communities
+
+        self.available_communities = State.available_communities
         self.selected_communities = []
         self.episode_rewards = []
 
-    def step(self , action_idx : int  ) -> Tuple[State , torch.FloatTensor, bool , Dict[str , Any]]:
+    def step(self , action_idx : int) -> Tuple[State , torch.FloatTensor, bool , Dict[str , Any]]:
         """returns new state , action , done flag and info"""
 
         if action_idx >= len(self.available_communities):
@@ -148,55 +143,90 @@ class Environment:
             community_features= self.available_communities, 
             selected_communities= self.selected_communities,
             remaining_budget= self.max_selections - len(self.selected_communities)
-        )
-    
-    def _calculate_reward(self , community : CommunityFeatures) -> torch.FloatTensor: 
-        components = self._get_reward_components(community)
-        component_keys = components.keys
-
-        if component_keys == "relevance" or "quality" or "diversity": 
-            reward = self.relevance_weight*components['relevance'] + self.diversity_weight*components['diversity'] + self.quality_weight * components['quality']
-            
-            reward_tensor = torch.FloatTensor(reward , device = torch.device)
-
-        return reward_tensor
-            
-    def _get_reward_components(self , community: CommunityFeatures) -> Dict[str , float]:
-
-
-        query_similarity = cosine_similarity(
-            self.current_query.reshape(-1 , 1) , community.feature_vector[:384].reshape(-1 , 1)
-        )[0,0]
-
-        quality_score = community.confidence_score
-
-        diversity_score = 1.0
-
-        if self.selected_communities:
-            selected_features = np.array([
-                cf.feature_vector for cf in self.available_communities
-                if cf.community_id in self.selected_communities
-            ])
-            
-            if selected_features.shape[0] > 0:
-                diversity_similarities = cosine_similarity(
-                    community.feature_vector.reshape(1, -1),
-                    selected_features
-                )
-                diversity_score = 1.0 - np.mean(diversity_similarities)
-
-
-        return {
-            'relevance': float(query_similarity),
-            'quality': float(quality_score),
-            'diversity': float(diversity_score)
-        }
-    
-    
+        )    
 
 @dataclass
-class Reward: 
-    """Reward for the action. It will depend on probable a certain community is chosen from a 
-    bunch of communities"""
+class Agent:
 
+    def __init__(self , state_dim: int , max_communities: int = 30  , device: str = 'gpu'):
+        self.device = torch.device(device)
+
+        self.actor = Actor(state_dim , max_communities).to(self.device)
+        self.critic = Critic(state_dim).to(device)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.gamma = 0.99 
+        self.entropy_coeff = 0.01 
     
+    def select_communities(self , init_state: State , max_selection:int = 5) -> Tuple[List[str] , Dict[str, Any]]: 
+        current_state = init_state
+        
+        action_info = {
+            'actions_taken' : [],
+            'action_prob' : [],
+            'state_values' : [],
+            'rewards_received' : []
+        }
+
+        selected_communities = []
+
+        for _ in range(max_selection): 
+            action_idx , action_probs = self.actor.select_action(current_state)
+            state_value = self.critic.evaluate_state(current_state)
+
+            if action_idx >= len(current_state.available_communities):
+                break 
+
+            selected_community = current_state.available_communities[action_idx]
+            selected_communities.append(selected_community)
+
+            action_info['actions_taken'].append(action_idx)
+            action_info['action_probs'].append(action_probs)
+            action_info['state_values'].append(state_value)
+            
+            current_state.selected_communities.append(selected_community)
+            current_state.remaining_budget -= 1
+            
+            reward = Environment._calculate_reward()
+            action_info['rewards_received'].append(reward)
+            
+            if current_state.remaining_budget <= 0:
+                break
+        
+        return selected_communities, action_info
+    
+
+
+@dataclass
+class Reward:
+    weights: Dict[str , float]
+    community_tensor =  State.llm_community_features
+    query = State.llm_query_features
+    selected = State.selected_communities
+    available = State.available_communities
+    threshold: float
+
+    def diversity_score(self , diversity_weight: int = 0.2):
+        """Diversity check to see if model doesnt run in loop"""
+
+        if self.selected:
+            similarity = cosine_similarity(self.available.flatten() , self.selected.flatten())
+        else:
+            similarity = 1.0 
+
+        diversity = torch.FloatTensor(diversity_weight)*(1 - np.mean(similarity))
+        return diversity
+        
+    def _calculate_reward(self) -> torch.Tensor:
+        
+        query_score = cosine_similarity(self.query.flatten() , self.community_tensor.flatten()) 
+        
+        if query_score > self.threshold:
+            total_reward = 0.5
+
+        
+    
+
+
+
+        

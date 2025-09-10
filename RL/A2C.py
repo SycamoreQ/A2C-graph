@@ -13,6 +13,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
+    """
+
+    """
     
     def __init__(self ,state_dim:int ,  max_communities:int , hidden_dim = 256):
         super.__init__()
@@ -72,3 +75,52 @@ class Actor(nn.Module):
         log_prob = dist.log_prob(action)
         
         return action.item(), log_prob
+    
+
+class Critic(nn.Module):
+    """
+    CRITIC ROLE: Estimates how good the current state is
+    - Input: Current state
+    - Output: Single value estimate (expected future reward from this state)
+    - Goal: Learn to accurately predict total reward from any state
+    """
+    
+    def __init__(self, state_dim: int, hidden_dim: int = 256):
+        super().__init__()
+        
+        self.state_encoder = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1)
+        )
+        
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, 1)
+        )
+        
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass: State -> Value Estimate
+        Args:
+            state: Flattened state tensor
+        Returns:
+            value: Estimated value of the state (expected future reward)
+        """
+        state_features = self.state_encoder(state)
+        
+        value = self.value_head(state_features)
+        
+        return value
+    
+    def evaluate_state(self, state: State) -> torch.Tensor:
+        """Evaluate how good the current state is"""
+        state_tensor = state.to_flat_tensor().unsqueeze(0)
+        value = self.forward(state_tensor)
+        return value
+    
+
