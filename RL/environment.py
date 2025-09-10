@@ -18,52 +18,65 @@ class Action:
     action_index: int
 
 
-
-@dataclass
 class State:
-    """State representation for the RL environment."""
-    query_embedding: np.ndarray
-    community_features: List[CommunityFeatures] 
-    selected_communities: List[str]
-    remaining_budget: int
+    """State containing LLM features and current selection status"""
+    llm_query_features: torch.Tensor     
+    llm_community_features: torch.Tensor 
+    llm_hypergraph_features: torch.Tensor 
+    available_communities: List[str]      
+    selected_communities: List[str]      
+    remaining_budget: int                 
+    community_embeddings: torch.Tensor  
+    community_scores: torch.Tensor       
     
-    def to_tensor(self, device: torch.device) -> torch.Tensor:
-        """Convert state to tensor for neural network input."""
-        community_matrix = np.stack([cf.feature_vector for cf in self.community_features])
+    def to_flat_tensor(self) -> torch.Tensor:
+        """Convert entire state to flat tensor for neural network input"""
+        components = [
+            self.llm_query_features.flatten(),
+            self.llm_community_features.flatten(), 
+            self.llm_hypergraph_features.flatten(),
+            torch.tensor([self.remaining_budget / 10.0]), 
+            self.community_scores  
+        ]
         
-        selection_mask = np.array([
-            1.0 if cf.community_id in self.selected_communities else 0.0 
-            for cf in self.community_features
+        #selection mask (0 if selected, 1 if available)
+        selection_mask = torch.tensor([
+            0.0 if comm_id in self.selected_communities else 1.0 
+            for comm_id in self.available_communities
         ])
+        components.append(selection_mask)
         
-        community_agg = np.mean(community_matrix, axis=0)
-        
-        state_vector = np.concatenate([
-            self.query_embedding,
-            community_agg,
-            selection_mask,
-            [self.remaining_budget / 10.0]  
-        ])
-        
-        return torch.FloatTensor(state_vector).to(device)
+        return torch.cat(components, dim=0)
     
-
 @dataclass
-class ActionSpace: 
-    action_index: int 
-    action: List[Action] 
-    space_size: List[int , int]
-    
-    def to_tensor(self) -> torch.Tensor:
-
-        action_space_tensor = torch.zeros(self.space_size)
-
-        action_space_tensor[action_space_tensor[:,0] , action_space_tensor[:,1]] = torch.tensor(self.action).float()
-
-
-        return action_space_tensor  
-
+class Action: 
+    def create_rl_action_space(self, pipeline_output: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+        """
+        Create action space tensors for RL agent
         
+        Args:
+            pipeline_output: Output from execute_tensorized_pipeline
+            
+        Returns:
+            Dictionary of possible actions as tensors
+        """
+        actions = {}
+        
+        if 'communities' in pipeline_output:
+            community_text = pipeline_output['communities']['text']
+            community_mentions = community_text.lower().count('community')
+            actions['select_communities'] = torch.arange(community_mentions, dtype=torch.float32)
+        
+        if 'refined_query' in pipeline_output:
+            refinement_text = pipeline_output['refined_query']['text']
+            actions['refine_query'] = torch.tensor([1.0, 0.5, 0.0])  # [accept, modify, reject]
+        
+        if 'hypergraph' in pipeline_output:
+            hypergraph_text = pipeline_output['hypergraph']['text']
+            edge_mentions = hypergraph_text.lower().count('edge')
+            actions['navigate_hypergraph'] = torch.arange(max(1, edge_mentions), dtype=torch.float32)
+        
+        return actions
 
         
 
