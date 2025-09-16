@@ -131,7 +131,7 @@ def get_trending_community(
 
 def get_trending_topic_subgraph(
         communities: Iterable[Community],
-        type: "paper",
+        type: "Entity",
         top_k : int = 5,
         min_entity_count:int =  10
 ) -> List[Community]:

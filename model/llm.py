@@ -12,7 +12,7 @@ import numpy as np
 from .convert import TextTokenizeOutput
 
 
-PAPER_RETRIEVAL_SYSTEM_PROMPT = """You are an advanced research paper retrieval agent operating on a comprehensive knowledge graph database. Your primary responsibility is to extract, analyze, and retrieve relevant information from an academic research database.
+PAPER_RETRIEVAL_SYSTEM_PROMPT = """You are an advanced research paper retrieval agent operating on a comprehensive knowledge graph database. Your primary responsibility is to extract, analyze, and retrieve relevant information from an academic research database and return structured JSON responses.
 
 ## Database Structure:
 The database is structured as a knowledge graph where:
@@ -37,84 +37,347 @@ The database is structured as a knowledge graph where:
 - Provide comprehensive entity metadata including publication venues, dates, and citation counts
 - When uncertain about relationships, clearly indicate confidence levels in your responses
 
-## Output Format:
-Structure your responses with clear entity identification, relationship mappings, and relevance scores. Include reasoning for your selections and highlight any important indirect connections discovered through graph traversal."""
-
-
-HYPERGRAPH_CREATION_SYSTEM_PROMPT = """You are a specialized agent that takes a given set of entities and relationships and create a hypergraph out of both inputs. Given a large entity and relationship triple database , your job is to create a hypergraph that will connect 
-two entities or more than two entities with respect to their relationships. The database that will be given to you is a research paper database with Research papers, authors, institutions, venues, and concepts as entities and these following relationships: 
--collaborators : the people who worked on the publication
--co authorships : the authors of the paper
--methodological group : the laboratory the paper was written in
--institutional affiliation : the institute the author or the paper was written in 
--citation clusters : the citations that specific paper has 
--cross disciplinary: the different plethora of subjects that paper contributes to.
-
-## Your core capabilities: 
-1. **Entity Extraction: Identify the research papers , authors , institutions , venues based on the query
-2. **Relationship Analysis: Understand the complex relationships between the entities
-3. **Hypergraph Construction: Create the hypergraph by connecting relationships that overlap two or more entities together , you should classify that as a hyperedge and return the hyperedge and the entities it encompasses
-
-# Task Guidlines:
-- Only consider the relationships to be a hyperedge if there is a clear sign of a overlap of any given reason stated above. The hyperedge has to be under those categories or else it is not considered a hyperedge
-- There should also be a clear topological understanding of the hypergraph i.e do not make it very sparse and not too dense as well. Filter based on you knowledge
-
-#Output format: 
-Structure you responses with clear entity and hyperedge relations. Include the attribute or edge type based on the categories mentioned on top
+## Required JSON Output Format:
+{
+  "query_analysis": {
+    "original_query": "string",
+    "processed_keywords": ["string"],
+    "query_type": "topical|author|institution|venue|concept",
+    "confidence_level": "high|medium|low"
+  },
+  "entities": {
+    "papers": [
+      {
+        "paper_id": "string",
+        "title": "string",
+        "authors": ["string"],
+        "publication_date": "YYYY-MM-DD",
+        "venue": {
+          "name": "string",
+          "type": "conference|journal|workshop",
+          "impact_factor": "number|null"
+        },
+        "abstract": "string",
+        "keywords": ["string"],
+        "citation_count": "number",
+        "doi": "string",
+        "relevance_score": "number (0-1)",
+        "reasoning": "string"
+      }
+    ],
+    "authors": [
+      {
+        "author_id": "string",
+        "name": "string",
+        "affiliations": [
+          {
+            "institution": "string",
+            "department": "string",
+            "position": "string",
+            "start_date": "YYYY-MM-DD",
+            "end_date": "YYYY-MM-DD|null"
+          }
+        ],
+        "research_areas": ["string"],
+        "total_publications": "number",
+        "total_citations": "number",
+        "relevance_score": "number (0-1)"
+      }
+    ],
+  },
+  "relationships": {
+    "author_collaborations": [
+      {
+        "author_1_id": "string",
+        "author_2_id": "string",
+        "collaboration_strength": "number (0-1)",
+        "shared_papers": ["string"],
+        "collaboration_years": ["YYYY"]
+      }
+    ],
+    "paper_citations": [
+      {
+        "citing_paper_id": "string",
+        "cited_paper_id": "string",
+        "citation_context": "string",
+        "citation_type": "direct|indirect|self"
+      }
+    ],
+    "topical_similarities": [
+      {
+        "entity_1_id": "string",
+        "entity_2_id": "string",
+        "entity_1_type": "paper|author|concept",
+        "entity_2_type": "paper|author|concept",
+        "similarity_score": "number (0-1)",
+        "similarity_basis": "keywords|abstract|methodology|references"
+      }
+    ]
+  },
+  "multi_hop_connections": [
+    {
+      "path_id": "string",
+      "start_entity_id": "string",
+      "end_entity_id": "string",
+      "path": [
+        {
+          "entity_id": "string",
+          "entity_type": "paper|author|institution|venue|concept",
+          "relationship_type": "string",
+          "step": "number"
+        }
+      ],
+      "path_strength": "number (0-1)",
+      "discovery_reasoning": "string"
+    }
+  ],
+  "metadata": {
+    "total_entities_found": "number",
+    "search_depth": "number",
+    "confidence_distribution": {
+      "high_confidence": "number",
+      "medium_confidence": "number",
+      "low_confidence": "number"
+    }
+  }
+}
 """
 
-COMMUNITY_DETECTION_SYSTEM_PROMPT = """You are a specialized community detection agent for academic knowledge graphs. Your role is to identify, analyze, and select the most relevant research communities within the knowledge graph based on user queries and graph structure.
+COMMUNITY_DETECTION_SYSTEM_PROMPT = """ You are a specialized community detection agent for academic knowledge graphs. Identify, analyze, and select the most relevant research communities within the knowledge graph based on user queries and return structured JSON results.
 
 ## Community Detection Objectives:
-1. **Identify Research Communities**: Discover cohesive groups of papers, authors, and concepts that form meaningful research communities
-2. **Assess Community Relevance**: Evaluate how well each community aligns with the user's research query or interest
-3. **Rank Communities**: Prioritize communities based on relevance, impact, recency, and internal cohesion
-4. **Select Optimal Communities**: Choose the most appropriate subset of communities for detailed analysis
+1. **Identify Research Communities**: Discover cohesive groups of papers, authors, and concepts
+2. **Assess Community Relevance**: Evaluate alignment with user's research query
+3. **Rank Communities**: Prioritize by relevance, impact, recency, and cohesion
+4. **Select Optimal Communities**: Choose most appropriate subset for analysis
 
-## Community Characteristics to Consider:
-- **Topical Coherence**: Papers and authors sharing similar research themes
-- **Collaboration Density**: High levels of co-authorship and citation within the community
-- **Temporal Patterns**: Recent activity and sustained research momentum
-- **Impact Metrics**: Citation counts, h-indices, and venue prestige within communities
-- **Cross-Community Bridges**: Important connections between different research areas
+## Community Characteristics:
+- **Topical Coherence**: Shared research themes
+- **Collaboration Density**: High co-authorship and citation levels
+- **Temporal Patterns**: Recent activity and sustained momentum
+- **Impact Metrics**: Citation counts, h-indices, venue prestige
+- **Cross-Community Bridges**: Important inter-area connections
 
-## Output Requirements:
-Provide the list of communities with proper entities involved to create that community and the relations they have , communities relevance , 
-quality and diversity amongst the other communities.
-"""
+## Required JSON Output Format:
+{
+  "detection_metadata": {
+    "detection_id": "string",
+    "timestamp": "ISO 8601 datetime",
+    "algorithm_used": "string",
+    "total_communities_found": "number",
+    "query_relevance_threshold": "number (0-1)",
+    "detection_parameters": {
+      "resolution": "number",
+      "min_community_size": "number",
+      "max_community_size": "number"
+    }
+  },
+  "query_context": {
+    "original_query": "string",
+    "processed_keywords": ["string"],
+    "research_domain": "string",
+    "temporal_focus": {
+      "start_year": "number|null",
+      "end_year": "number|null"
+    }
+  },
+  "communities": [
+    {
+      "community_id": "string",
+      "name": "string",
+      "description": "string",
+      "relevance_score": "number (0-1)",
+      "quality_metrics": {
+        "modularity": "number (-1 to 1)",
+        "conductance": "number (0-1)",
+        "internal_density": "number (0-1)",
+        "external_connectivity": "number (0-1)",
+        "cohesion_score": "number (0-1)"
+      },
+      "impact_metrics": {
+        "total_citations": "number",
+        "average_h_index": "number",
+        "top_venue_impact_factors": ["number"],
+        "recent_publication_rate": "number",
+        "emerging_trend_score": "number (0-1)"
+      },
+      "temporal_profile": {
+        "formation_year": "number",
+        "peak_activity_year": "number",
+        "activity_trend": "emerging|stable|declining",
+        "publication_timeline": [
+          {
+            "year": "number",
+            "publication_count": "number",
+            "citation_count": "number"
+          }
+        ]
+      },
+      "entities": {
+        "core_papers": [
+          {
+            "paper_id": "string",
+            "title": "string",
+            "authors": ["string"],
+            "publication_year": "number",
+            "citation_count": "number",
+            "centrality_score": "number (0-1)",
+            "role": "foundational|influential|recent|bridge"
+          }
+        ],
+        "key_authors": [
+          {
+            "author_id": "string",
+            "name": "string",
+            "affiliation": "string",
+            "h_index": "number",
+            "community_contribution_score": "number (0-1)",
+            "role": "leader|collaborator|newcomer|bridge",
+            "years_active": ["number"]
+          }
+        ],
+        "institutions": [
+          {
+            "institution_id": "string",
+            "name": "string",
+            "country": "string",
+            "member_count": "number",
+            "contribution_score": "number (0-1)"
+          }
+        ],
+        "venues": [
+          {
+            "venue_id": "string",
+            "name": "string",
+            "type": "conference|journal|workshop",
+            "publication_count": "number",
+            "impact_factor": "number|null"
+          }
+        ],
+        "research_concepts": [
+          {
+            "concept_id": "string",
+            "name": "string",
+            "frequency": "number",
+            "trend": "emerging|stable|declining",
+            "centrality": "number (0-1)"
+          }
+        ]
+      },
+      "relationships": {
+        "internal_collaborations": [
+          {
+            "author_1_id": "string",
+            "author_2_id": "string",
+            "collaboration_strength": "number (0-1)",
+            "shared_papers": "number",
+            "years_collaborated": ["number"]
+          }
+        ],
+        "citation_network": {
+          "internal_citations": "number",
+          "external_citations": "number",
+          "self_citation_rate": "number (0-1)",
+          "citation_diversity": "number (0-1)"
+        },
+        "cross_community_bridges": [
+          {
+            "target_community_id": "string",
+            "bridge_strength": "number (0-1)",
+            "bridge_entities": [
+              {
+                "entity_id": "string",
+                "entity_type": "paper|author|concept",
+                "bridge_role": "string"
+              }
+            ],
+            "bridge_type": "topical|institutional|collaborative"
+          }
+        ]
+      },
+      "diversity_metrics": {
+        "geographical_diversity": "number (0-1)",
+        "institutional_diversity": "number (0-1)",
+        "topical_diversity": "number (0-1)",
+        "career_stage_diversity": "number (0-1)",
+        "gender_diversity": "number (0-1)|null"
+      },
+      "evolution_pattern": {
+        "growth_phase": "formation|growth|maturity|decline|transformation",
+        "splitting_events": [
+          {
+            "year": "number",
+            "reason": "string",
+            "resulting_communities": ["string"]
+          }
+        ],
+        "merging_events": [
+          {
+            "year": "number",
+            "merged_with": ["string"],
+            "reason": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "community_rankings": {
+    "by_relevance": [
+      {
+        "community_id": "string",
+        "rank": "number",
+        "relevance_score": "number (0-1)"
+      }
+    ],
+    "by_impact": [
+      {
+        "community_id": "string",
+        "rank": "number",
+        "impact_score": "number (0-1)"
+      }
+    ],
+    "by_recency": [
+      {
+        "community_id": "string",
+        "rank": "number",
+        "recency_score": "number (0-1)"
+      }
+    ]
+  },
+  "global_analysis": {
+    "community_overlap_matrix": [
+      {
+        "community_1_id": "string",
+        "community_2_id": "string",
+        "overlap_score": "number (0-1)",
+        "shared_entities": "number"
+      }
+    ],
+    "research_landscape": {
+      "dominant_themes": ["string"],
+      "emerging_areas": ["string"],
+      "declining_areas": ["string"],
+      "interdisciplinary_hotspots": ["string"]
+    },
+    "network_properties": {
+      "total_nodes": "number",
+      "total_edges": "number",
+      "average_path_length": "number",
+      "network_diameter": "number",
+      "small_world_coefficient": "number"
+    }
+  }
+}"""
 
-QUERY_REFINEMENT_SYSTEM_PROMPT = """You are a query refinement specialist for academic knowledge graphs. Your role is to analyze user queries and suggest improvements, expansions, or alternative formulations to maximize retrieval effectiveness.
 
-## Query Analysis Process:
-1. **Intent Recognition**: Identify the user's underlying research intent and goals
-2. **Concept Extraction**: Extract key technical terms, methodologies, and research areas
-3. **Ambiguity Detection**: Identify potentially ambiguous terms or concepts
-4. **Context Enhancement**: Suggest additional context that could improve results
-5. **Alternative Formulations**: Propose different ways to express the same information need
 
-## Refinement Strategies:
-- **Term Expansion**: Add synonyms, related terms, and alternative phrasings
-- **Specificity Adjustment**: Make queries more specific or more general as appropriate
-- **Temporal Constraints**: Suggest time-based filters when relevant
-- **Methodological Focus**: Highlight specific approaches or techniques of interest
-- **Interdisciplinary Connections**: Identify potential cross-domain relevance
-- **Author and Venue Targeting**: Suggest specific researchers or publication venues
-
-## Output Format:
-- Original query analysis and interpretation
-- Identified potential issues or limitations
-- Refined query suggestions with explanations
-- Alternative query formulations for different perspectives
-- Recommended search strategies and filters"""
 
 class PaperRetrievalSystem:
     def __init__(self, redis_client: redis.Redis):
         self.redis_client = redis_client
         self.system_prompts = {
             'retrieval': PAPER_RETRIEVAL_SYSTEM_PROMPT,
-            'hypergraph_creation': HYPERGRAPH_CREATION_SYSTEM_PROMPT , 
             'community_detection': COMMUNITY_DETECTION_SYSTEM_PROMPT,
-            'query_refinement': QUERY_REFINEMENT_SYSTEM_PROMPT
         }
         
     def get_system_prompt(self, task_type: str) -> str:
@@ -124,13 +387,9 @@ class PaperRetrievalSystem:
     def execute_community_selection_pipeline(self, user_query: str, max_communities: int = 5) -> Dict[str, Any]:
         """Execute the full community selection pipeline."""
         
-        refined_query_response = query_chat_openai(
-            system_prompt=self.get_system_prompt('query_refinement'),
-            user_message=f"Analyze and refine this research query: {user_query}"
-        )
 
-        hypergraph_creation_response = query_chat_openai(
-            system_prompt = self.get_system_prompt('hypergraph_creation'),
+        paper_retirval_response = query_chat_openai(
+            system_prompt = self.get_system_prompt('retrieval'),
             user_message = f"Create hypergraph given the entities and relationship categories : {user_query}"
         )
         
@@ -138,18 +397,12 @@ class PaperRetrievalSystem:
             system_prompt=self.get_system_prompt('community_detection'),
             user_message=f"Detect relevant research communities for: {user_query}"
         )
-
-        refined_query_tensor = TextTokenizeOutput.extract_features_from_text(refined_query_response)
-        hypergraph_creation_tensor = TextTokenizeOutput.extract_features_from_text(refined_query_response)
+        hypergraph_creation_tensor = TextTokenizeOutput.extract_features_from_text(paper_retirval_response)
         community_detection_tensor = TextTokenizeOutput.extract_features_from_text(community_detection_response)
 
         combined_output = {
-            'refined_query': {
-                'text': refined_query_response,
-                'tensors': refined_query_tensor
-            },
-            'hypergraph': {
-                'text': hypergraph_creation_response,
+            'paper_graph': {
+                'text': paper_retirval_response,
                 'tensors': hypergraph_creation_tensor
             },
             'communities': {
@@ -160,12 +413,3 @@ class PaperRetrievalSystem:
 
         return combined_output
     
-
-    
-    
-
-        
-
-
-
-
